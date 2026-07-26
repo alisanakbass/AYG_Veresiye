@@ -10,7 +10,7 @@ export default function TransactionModal({ isOpen, onClose, selectedCustomer = n
     { product_name: '', quantity: 1, unit_price: '', total_price: 0 }
   ]);
   const [notes, setNotes] = useState('');
-  const [sendWhatsapp, setSendWhatsapp] = useState(true);
+  const [sendWhatsapp, setSendWhatsapp] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -21,7 +21,7 @@ export default function TransactionModal({ isOpen, onClose, selectedCustomer = n
       } else if (allCustomers.length > 0) {
         setCustomerId(allCustomers[0].id);
       }
-      setItems([{ product_name: '', quantity: 1, unit_price: '', total_price: 0 }]);
+      setItems([{ product_name: '', quantity: 1, unit_price: '', total_price: 0, is_pending_price: false }]);
       setNotes('');
     }
   }, [isOpen, selectedCustomer]);
@@ -33,15 +33,20 @@ export default function TransactionModal({ isOpen, onClose, selectedCustomer = n
     const newItems = [...items];
     newItems[index][field] = value;
 
-    const qty = Number(newItems[index].quantity) || 0;
-    const price = Number(newItems[index].unit_price) || 0;
-    newItems[index].total_price = qty * price;
+    if (field === 'is_pending_price' && value === true) {
+      newItems[index].unit_price = 0;
+      newItems[index].total_price = 0;
+    } else {
+      const qty = Number(newItems[index].quantity) || 0;
+      const price = Number(newItems[index].unit_price) || 0;
+      newItems[index].total_price = newItems[index].is_pending_price ? 0 : qty * price;
+    }
 
     setItems(newItems);
   };
 
   const addItemRow = () => {
-    setItems([...items, { product_name: '', quantity: 1, unit_price: '', total_price: 0 }]);
+    setItems([...items, { product_name: '', quantity: 1, unit_price: '', total_price: 0, is_pending_price: false }]);
   };
 
   const removeItemRow = (index) => {
@@ -50,6 +55,7 @@ export default function TransactionModal({ isOpen, onClose, selectedCustomer = n
   };
 
   const grandTotal = items.reduce((sum, item) => sum + (Number(item.total_price) || 0), 0);
+  const hasPendingItems = items.some(item => item.is_pending_price);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -59,16 +65,32 @@ export default function TransactionModal({ isOpen, onClose, selectedCustomer = n
       return;
     }
 
-    const validItems = items.filter(item => item.product_name.trim() && Number(item.total_price) > 0);
-    if (validItems.length === 0) {
-      alert('Lütfen en az 1 ürün adı ve birim fiyatı giriniz.');
+    const processedItems = items
+      .filter(item => item.product_name && item.product_name.trim() !== '')
+      .map(item => {
+        const hasPrice = item.unit_price !== '' && !isNaN(Number(item.unit_price)) && Number(item.unit_price) > 0;
+        const isPending = Boolean(item.is_pending_price) || !hasPrice;
+        const qty = Number(item.quantity) || 1;
+        const price = isPending ? 0 : Number(item.unit_price) || 0;
+        return {
+          ...item,
+          product_name: item.product_name.trim(),
+          quantity: qty,
+          unit_price: price,
+          total_price: isPending ? 0 : qty * price,
+          is_pending_price: isPending
+        };
+      });
+
+    if (processedItems.length === 0) {
+      alert('Lütfen en az 1 ürün adı giriniz.');
       return;
     }
 
     // Borç Kaydını Oluştur
     const { transaction, newTotalBalance } = addTransaction({
       customerId,
-      items: validItems,
+      items: processedItems,
       notes
     });
 
@@ -78,16 +100,17 @@ export default function TransactionModal({ isOpen, onClose, selectedCustomer = n
     if (sendWhatsapp && targetCustomer) {
       const msg = buildTransactionMessage(targetCustomer, transaction, newTotalBalance);
       const url = createWhatsappLink(targetCustomer.phone, msg);
-      window.open(url, '_blank');
+      if (window.confirm('💬 Müşteriye WhatsApp borç bilgilendirme mesajı gönderilsin mi?')) {
+        window.open(url, '_blank');
+      }
     }
 
     onClose();
-    window.location.reload();
   };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" style={{ maxWidth: '680px' }} onClick={(e) => e.stopPropagation()}>
+      <div className="modal-content" style={{ maxWidth: '720px' }} onClick={(e) => e.stopPropagation()}>
         
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -132,64 +155,79 @@ export default function TransactionModal({ isOpen, onClose, selectedCustomer = n
                 <div 
                   key={idx} 
                   style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: '2fr 1fr 1fr 1fr auto', 
-                    gap: '0.5rem', 
-                    alignItems: 'center', 
-                    marginBottom: '0.5rem',
-                    background: 'rgba(15, 23, 42, 0.4)',
-                    padding: '0.5rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.35rem',
+                    marginBottom: '0.65rem',
+                    background: item.is_pending_price ? 'rgba(245, 158, 11, 0.08)' : 'rgba(15, 23, 42, 0.4)',
+                    padding: '0.65rem',
                     borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--border-color)'
+                    border: item.is_pending_price ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border-color)'
                   }}
                 >
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ürün Adı (Örn: Çay 1 kg)"
-                    value={item.product_name}
-                    onChange={(e) => handleItemChange(idx, 'product_name', e.target.value)}
-                    className="form-input"
-                    style={{ padding: '0.5rem' }}
-                  />
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1.2fr 1.2fr auto', gap: '0.5rem', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ürün Adı (Örn: Çimento 50 kg)"
+                      value={item.product_name}
+                      onChange={(e) => handleItemChange(idx, 'product_name', e.target.value)}
+                      className="form-input"
+                      style={{ padding: '0.5rem' }}
+                    />
 
-                  <input
-                    type="number"
-                    min="1"
-                    step="0.5"
-                    required
-                    placeholder="Adet"
-                    value={item.quantity}
-                    onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
-                    className="form-input"
-                    style={{ padding: '0.5rem' }}
-                  />
+                    <input
+                      type="number"
+                      min="0.1"
+                      step="0.5"
+                      required
+                      placeholder="Adet"
+                      value={item.quantity}
+                      onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
+                      className="form-input"
+                      style={{ padding: '0.5rem' }}
+                    />
 
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    required
-                    placeholder="Birim ₺"
-                    value={item.unit_price}
-                    onChange={(e) => handleItemChange(idx, 'unit_price', e.target.value)}
-                    className="form-input"
-                    style={{ padding: '0.5rem' }}
-                  />
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      disabled={item.is_pending_price}
+                      placeholder={item.is_pending_price ? 'Sonradan' : 'Birim ₺'}
+                      value={item.is_pending_price ? '' : item.unit_price}
+                      onChange={(e) => handleItemChange(idx, 'unit_price', e.target.value)}
+                      className="form-input"
+                      style={{ padding: '0.5rem', opacity: item.is_pending_price ? 0.5 : 1 }}
+                    />
 
-                  <div style={{ fontWeight: '700', fontSize: '0.875rem', color: 'var(--rose-text)', textAlign: 'right', paddingRight: '0.5rem' }}>
-                    ₺{Number(item.total_price || 0).toLocaleString('tr-TR')}
+                    <div style={{ fontWeight: '700', fontSize: '0.875rem', color: item.is_pending_price ? 'var(--amber-text)' : 'var(--rose-text)', textAlign: 'right', paddingRight: '0.25rem' }}>
+                      {item.is_pending_price ? '⏳ Fiyat Belirsiz' : `₺${Number(item.total_price || 0).toLocaleString('tr-TR')}`}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => removeItemRow(idx)}
+                      disabled={items.length === 1}
+                      className="btn btn-danger btn-sm btn-icon"
+                      style={{ opacity: items.length === 1 ? 0.3 : 1 }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => removeItemRow(idx)}
-                    disabled={items.length === 1}
-                    className="btn btn-danger btn-sm btn-icon"
-                    style={{ opacity: items.length === 1 ? 0.3 : 1 }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  {/* Sonradan Fiyatlandırılacak Checkbox Kutusu */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8125rem', marginTop: '0.2rem' }}>
+                    <input
+                      type="checkbox"
+                      id={`pending-${idx}`}
+                      checked={Boolean(item.is_pending_price)}
+                      onChange={(e) => handleItemChange(idx, 'is_pending_price', e.target.checked)}
+                      style={{ accentColor: '#f59e0b', cursor: 'pointer' }}
+                    />
+                    <label htmlFor={`pending-${idx}`} style={{ cursor: 'pointer', color: item.is_pending_price ? '#fbbf24' : 'var(--text-muted)', fontWeight: item.is_pending_price ? '700' : 'normal' }}>
+                      ⏳ Fiyatı Sonradan Belirlenecek (Müşteri ödemeye geldiğinde fiyata yansıtılacak)
+                    </label>
+                  </div>
                 </div>
               ))}
             </div>
@@ -205,7 +243,14 @@ export default function TransactionModal({ isOpen, onClose, selectedCustomer = n
               border: '1px solid rgba(244, 63, 94, 0.3)',
               marginBottom: '1.25rem' 
             }}>
-              <span style={{ fontWeight: '600', color: 'var(--rose-text)' }}>TOPLAM VERESİYE TUTARI:</span>
+              <div>
+                <span style={{ fontWeight: '600', color: 'var(--rose-text)' }}>TOPLAM VERESİYE TUTARI:</span>
+                {hasPendingItems && (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--amber-text)', fontWeight: '600' }}>
+                    * ⏳ Bazı ürünlerin fiyatı sonradan belirlenecektir.
+                  </div>
+                )}
+              </div>
               <span style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--rose-text)' }}>
                 ₺{grandTotal.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
               </span>

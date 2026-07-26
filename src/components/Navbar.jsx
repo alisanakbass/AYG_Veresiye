@@ -126,7 +126,7 @@ export default function Navbar({ activeTab, setActiveTab, theme, onToggleTheme }
               title="Demo verilerini sıfırla"
             >
               <RotateCcw size={14} />
-              <span style={{ display: 'none', '@media (min-width: 640px)': { display: 'inline' } }}>Sıfırla</span>
+              <span style={{ marginLeft: '0.25rem' }}>Sıfırla</span>
             </button>
           </div>
 

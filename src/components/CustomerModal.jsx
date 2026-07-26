@@ -13,8 +13,8 @@ export default function CustomerModal({ isOpen, onClose, onCreated }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!firstName.trim() || !lastName.trim() || !phone.trim()) {
-      alert('Lütfen Ad, Soyad ve Telefon numarası alanlarını doldurunuz.');
+    if (!firstName.trim() || !lastName.trim()) {
+      alert('Lütfen Ad ve Soyad alanlarını doldurunuz.');
       return;
     }
 
@@ -28,7 +28,6 @@ export default function CustomerModal({ isOpen, onClose, onCreated }) {
 
     if (onCreated) onCreated(newCustomer);
     onClose();
-    window.location.reload();
   };
 
   return (
@@ -75,17 +74,16 @@ export default function CustomerModal({ isOpen, onClose, onCreated }) {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Telefon Numarası *</label>
+              <label className="form-label">Telefon Numarası (İsteğe Bağlı)</label>
               <input
                 type="tel"
-                required
-                placeholder="Örn: 0532 123 45 67"
+                placeholder="Örn: 0532 123 45 67 (İsteğe bağlı)"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 className="form-input"
               />
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
-                WhatsApp mesajlarının iletilebilmesi için doğru telefon yazınız.
+                WhatsApp mesajları gönderilmeyecekse boş bırakabilirsiniz.
               </span>
             </div>
 

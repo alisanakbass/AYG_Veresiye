@@ -26,8 +26,8 @@ export default function CustomerFormPage({ onNavigateHome, onCustomerCreated }) 
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!firstName.trim() || !lastName.trim() || !phone.trim()) {
-      alert('Lütfen Ad, Soyad ve Telefon numarası alanlarını doldurunuz.');
+    if (!firstName.trim() || !lastName.trim()) {
+      alert('Lütfen Ad ve Soyad alanlarını doldurunuz.');
       return;
     }
 
@@ -86,11 +86,10 @@ export default function CustomerFormPage({ onNavigateHome, onCustomerCreated }) 
         </div>
 
         <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-          <label className="form-label">Telefon Numarası *</label>
+          <label className="form-label">Telefon Numarası (İsteğe Bağlı)</label>
           <input
             type="tel"
-            required
-            placeholder="Örn: 0532 123 45 67"
+            placeholder="Örn: 0532 123 45 67 (İsteğe bağlı)"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             className="form-input"

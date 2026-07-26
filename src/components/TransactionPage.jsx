@@ -4,14 +4,14 @@ import { getCustomers, addTransaction } from '../services/storage';
 import { buildTransactionMessage, createWhatsappLink } from '../services/whatsapp';
 import CustomerPicker from './CustomerPicker';
 
-export default function TransactionPage({ selectedCustomer = null, onNavigateHome }) {
+export default function TransactionPage({ selectedCustomer = null, onNavigateHome, showNotification }) {
   const [customers, setCustomers] = useState([]);
   const [customerId, setCustomerId] = useState('');
   const [items, setItems] = useState([
     { product_name: '', quantity: 1, unit_price: '', total_price: 0 }
   ]);
   const [notes, setNotes] = useState('');
-  const [sendWhatsapp, setSendWhatsapp] = useState(true);
+  const [sendWhatsapp, setSendWhatsapp] = useState(false);
 
   const [focusTargetIndex, setFocusTargetIndex] = useState(null);
 
@@ -42,16 +42,21 @@ export default function TransactionPage({ selectedCustomer = null, onNavigateHom
     const newItems = [...items];
     newItems[index][field] = value;
 
-    const qty = Number(newItems[index].quantity) || 0;
-    const price = Number(newItems[index].unit_price) || 0;
-    newItems[index].total_price = qty * price;
+    if (field === 'is_pending_price' && value === true) {
+      newItems[index].unit_price = 0;
+      newItems[index].total_price = 0;
+    } else {
+      const qty = Number(newItems[index].quantity) || 0;
+      const price = Number(newItems[index].unit_price) || 0;
+      newItems[index].total_price = newItems[index].is_pending_price ? 0 : qty * price;
+    }
 
     setItems(newItems);
   };
 
   const addItemRow = () => {
     const newIdx = items.length;
-    setItems(prev => [...prev, { product_name: '', quantity: 1, unit_price: '', total_price: 0 }]);
+    setItems(prev => [...prev, { product_name: '', quantity: 1, unit_price: '', total_price: 0, is_pending_price: false }]);
     setFocusTargetIndex(newIdx);
   };
 
@@ -59,6 +64,7 @@ export default function TransactionPage({ selectedCustomer = null, onNavigateHom
     if (items.length === 1) return;
     setItems(items.filter((_, i) => i !== index));
   };
+
 
   // AKILLI KLAVYE DÖNGÜSÜ (Ürün Adı -> Adet -> Fiyat -> [Doluysa Yeni Satır / Boşsa Not Kutusuna Atla])
   const handleKeyDown = (e) => {
@@ -133,22 +139,44 @@ export default function TransactionPage({ selectedCustomer = null, onNavigateHom
       return;
     }
 
-    const validItems = items.filter(item => item.product_name.trim() && Number(item.total_price) > 0);
-    if (validItems.length === 0) {
-      alert('Lütfen en az 1 ürün adı ve birim fiyatı giriniz.');
+    const processedItems = items
+      .filter(item => item.product_name && item.product_name.trim() !== '')
+      .map(item => {
+        const hasPrice = item.unit_price !== '' && !isNaN(Number(item.unit_price)) && Number(item.unit_price) > 0;
+        const isPending = Boolean(item.is_pending_price) || !hasPrice;
+        const qty = Number(item.quantity) || 1;
+        const price = isPending ? 0 : Number(item.unit_price) || 0;
+        return {
+          ...item,
+          product_name: item.product_name.trim(),
+          quantity: qty,
+          unit_price: price,
+          total_price: isPending ? 0 : qty * price,
+          is_pending_price: isPending
+        };
+      });
+
+    if (processedItems.length === 0) {
+      alert('Lütfen en az 1 ürün adı giriniz.');
       return;
     }
 
     const { transaction, newTotalBalance } = addTransaction({
       customerId,
-      items: validItems,
+      items: processedItems,
       notes
     });
+
+    if (showNotification && currentCustomer) {
+      showNotification(`🔴 ${currentCustomer.first_name} ${currentCustomer.last_name} için ₺${grandTotal.toLocaleString('tr-TR')} veresiye borcu kaydedildi!`);
+    }
 
     if (sendWhatsapp && currentCustomer) {
       const msg = buildTransactionMessage(currentCustomer, transaction, newTotalBalance);
       const url = createWhatsappLink(currentCustomer.phone, msg);
-      window.open(url, '_blank');
+      if (window.confirm('💬 Müşteriye WhatsApp borç detay mesajı gönderilsin mi?')) {
+        window.open(url, '_blank');
+      }
     }
 
     onNavigateHome();

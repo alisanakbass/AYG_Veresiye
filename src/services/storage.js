@@ -227,6 +227,12 @@ export function getCustomers() {
   }
 }
 
+const safeSupabaseCall = (query) => {
+  try {
+    Promise.resolve(query).catch(err => console.warn('Supabase arka plan senkronizasyon uyarısı:', err?.message || err));
+  } catch {}
+};
+
 // Müşteri Ekle
 export function addCustomer(customerData) {
   const customers = getCustomers();
@@ -244,7 +250,7 @@ export function addCustomer(customerData) {
   localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customers));
 
   // Supabase'e ekle
-  supabase.from('customers').upsert([newCustomer]).catch(err => console.warn('Supabase müşteri kaydetme hatası:', err));
+  safeSupabaseCall(supabase.from('customers').upsert([newCustomer]));
 
   return newCustomer;
 }
@@ -261,9 +267,9 @@ export function deleteCustomer(customerId) {
   localStorage.setItem(PAYMENTS_KEY, JSON.stringify(payments));
 
   // Supabase'den sil
-  supabase.from('customers').delete().eq('id', customerId).catch(() => {});
-  supabase.from('transactions').delete().eq('customer_id', customerId).catch(() => {});
-  supabase.from('payments').delete().eq('customer_id', customerId).catch(() => {});
+  safeSupabaseCall(supabase.from('customers').delete().eq('id', customerId));
+  safeSupabaseCall(supabase.from('transactions').delete().eq('customer_id', customerId));
+  safeSupabaseCall(supabase.from('payments').delete().eq('customer_id', customerId));
 }
 
 // Veresiyeleri Getir
@@ -310,14 +316,95 @@ export function addTransaction({ customerId, items, notes }) {
   localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customers));
 
   // Supabase'e ekle ve bakiyeyi güncelle
-  supabase.from('transactions').upsert([newTransaction]).catch(() => {});
-  supabase.from('customers').upsert([customers[customerIndex]]).catch(() => {});
+  safeSupabaseCall(supabase.from('transactions').upsert([newTransaction]));
+  safeSupabaseCall(supabase.from('customers').upsert([customers[customerIndex]]));
 
   return {
     transaction: newTransaction,
     newTotalBalance: customers[customerIndex].total_balance,
     customer: customers[customerIndex]
   };
+}
+
+// Veresiye Kaydı Fiyatlarını Güncelleme (Sonradan Fiyatlandırma)
+export function updateTransactionPrices({ transactionId, updatedItems, notes }) {
+  const transactions = getTransactions();
+  const txIndex = transactions.findIndex(t => t.id === transactionId);
+
+  if (txIndex === -1) {
+    throw new Error('Veresiye kaydı bulunamadı');
+  }
+
+  const existingTx = transactions[txIndex];
+  const oldTotalAmount = Number(existingTx.total_amount || 0);
+
+  const processedItems = updatedItems.map(item => {
+    const qty = Number(item.quantity) || 0;
+    const isPending = Boolean(item.is_pending_price);
+    const unitPrice = isPending ? 0 : Number(item.unit_price) || 0;
+    const totalPrice = isPending ? 0 : qty * unitPrice;
+    return {
+      ...item,
+      quantity: qty,
+      unit_price: unitPrice,
+      total_price: totalPrice,
+      is_pending_price: isPending
+    };
+  });
+
+  const newTotalAmount = processedItems.reduce((sum, item) => sum + item.total_price, 0);
+
+  transactions[txIndex] = {
+    ...existingTx,
+    items: processedItems,
+    total_amount: newTotalAmount,
+    notes: notes !== undefined ? notes : existingTx.notes,
+    updated_at: new Date().toISOString()
+  };
+
+  localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(transactions));
+
+  const customers = getCustomers();
+  const customerIndex = customers.findIndex(c => c.id === existingTx.customer_id);
+
+  if (customerIndex !== -1) {
+    const currentBalance = Number(customers[customerIndex].total_balance || 0);
+    const balanceDiff = newTotalAmount - oldTotalAmount;
+    customers[customerIndex].total_balance = Math.max(0, currentBalance + balanceDiff);
+    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customers));
+
+    const dbTx = {
+      id: transactions[txIndex].id,
+      customer_id: transactions[txIndex].customer_id,
+      items: transactions[txIndex].items,
+      total_amount: transactions[txIndex].total_amount,
+      notes: transactions[txIndex].notes || '',
+      created_by: transactions[txIndex].created_by || '',
+      transaction_date: transactions[txIndex].transaction_date
+    };
+
+    const dbCust = {
+      id: customers[customerIndex].id,
+      first_name: customers[customerIndex].first_name,
+      last_name: customers[customerIndex].last_name,
+      phone: customers[customerIndex].phone || '',
+      address: customers[customerIndex].address || '',
+      notes: customers[customerIndex].notes || '',
+      total_balance: customers[customerIndex].total_balance,
+      created_at: customers[customerIndex].created_at
+    };
+
+    safeSupabaseCall(supabase.from('transactions').upsert([dbTx]));
+    safeSupabaseCall(supabase.from('customers').upsert([dbCust]));
+
+    return {
+      transaction: transactions[txIndex],
+      customer: customers[customerIndex],
+      newTotalBalance: customers[customerIndex].total_balance
+    };
+  }
+
+  return { transaction: transactions[txIndex] };
 }
 
 // Ödemeleri Getir
@@ -366,8 +453,8 @@ export function addPayment({ customerId, amount, paymentMethod = 'cash', notes =
   localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(customers));
 
   // Supabase'e ekle ve bakiyeyi güncelle
-  supabase.from('payments').upsert([newPayment]).catch(() => {});
-  supabase.from('customers').upsert([customers[customerIndex]]).catch(() => {});
+  safeSupabaseCall(supabase.from('payments').upsert([newPayment]));
+  safeSupabaseCall(supabase.from('customers').upsert([customers[customerIndex]]));
 
   return {
     payment: newPayment,
@@ -401,7 +488,7 @@ export function addNote({ title, content, category = 'general' }) {
   notes.unshift(newNote);
   localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
 
-  supabase.from('notes').upsert([newNote]).catch(() => {});
+  safeSupabaseCall(supabase.from('notes').upsert([newNote]));
 
   return newNote;
 }
@@ -412,7 +499,7 @@ export function toggleNotePin(noteId) {
   if (idx > -1) {
     notes[idx].is_pinned = !notes[idx].is_pinned;
     localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
-    supabase.from('notes').upsert([notes[idx]]).catch(() => {});
+    safeSupabaseCall(supabase.from('notes').upsert([notes[idx]]));
   }
   return notes;
 }
@@ -423,7 +510,7 @@ export function toggleNoteComplete(noteId) {
   if (idx > -1) {
     notes[idx].is_completed = !notes[idx].is_completed;
     localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
-    supabase.from('notes').upsert([notes[idx]]).catch(() => {});
+    safeSupabaseCall(supabase.from('notes').upsert([notes[idx]]));
   }
   return notes;
 }
@@ -431,7 +518,7 @@ export function toggleNoteComplete(noteId) {
 export function deleteNote(noteId) {
   const notes = getNotes().filter(n => n.id !== noteId);
   localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
-  supabase.from('notes').delete().eq('id', noteId).catch(() => {});
+  safeSupabaseCall(supabase.from('notes').delete().eq('id', noteId));
   return notes;
 }
 

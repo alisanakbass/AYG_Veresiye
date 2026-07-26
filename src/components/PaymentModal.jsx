@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, CreditCard, MessageSquare, Check } from 'lucide-react';
-import { getCustomers, addPayment } from '../services/storage';
+import { X, CreditCard, MessageSquare, Check, AlertTriangle } from 'lucide-react';
+import { getCustomers, addPayment, getTransactions } from '../services/storage';
 import { buildPaymentMessage, createWhatsappLink } from '../services/whatsapp';
 
 export default function PaymentModal({ isOpen, onClose, selectedCustomer = null }) {
@@ -9,7 +9,7 @@ export default function PaymentModal({ isOpen, onClose, selectedCustomer = null 
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [notes, setNotes] = useState('');
-  const [sendWhatsapp, setSendWhatsapp] = useState(true);
+  const [sendWhatsapp, setSendWhatsapp] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -30,6 +30,8 @@ export default function PaymentModal({ isOpen, onClose, selectedCustomer = null 
   if (!isOpen) return null;
 
   const currentCustomer = customers.find(c => c.id === customerId);
+  const customerTransactions = customerId ? getTransactions(customerId) : [];
+  const hasPendingItems = customerTransactions.some(t => t.items && t.items.some(i => i.is_pending_price));
 
   const handleCustomerSelect = (e) => {
     const id = e.target.value;
@@ -47,6 +49,7 @@ export default function PaymentModal({ isOpen, onClose, selectedCustomer = null 
       setAmount(currentCustomer.total_balance);
     }
   };
+
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -74,11 +77,12 @@ export default function PaymentModal({ isOpen, onClose, selectedCustomer = null 
     if (sendWhatsapp && currentCustomer) {
       const msg = buildPaymentMessage(currentCustomer, payAmount, newTotalBalance);
       const url = createWhatsappLink(currentCustomer.phone, msg);
-      window.open(url, '_blank');
+      if (window.confirm('💬 Müşteriye WhatsApp ödeme makbuzu mesajı gönderilsin mi?')) {
+        window.open(url, '_blank');
+      }
     }
 
     onClose();
-    window.location.reload();
   };
 
   return (
@@ -120,15 +124,15 @@ export default function PaymentModal({ isOpen, onClose, selectedCustomer = null 
               <div style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
-                justify: 'space-between',
+                justifyContent: 'space-between',
                 padding: '0.75rem 1rem', 
                 background: 'rgba(15, 23, 42, 0.6)', 
                 borderRadius: 'var(--radius-md)',
                 border: '1px solid var(--border-color)',
-                marginBottom: '1.25rem'
+                marginBottom: '1rem'
               }}>
                 <div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Müşterinin Mevcut Toplam Borcu:</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Müşterinin Mevcut Kayıtlı Borcu:</div>
                   <div style={{ fontSize: '1.25rem', fontWeight: '700', color: 'var(--rose-text)' }}>
                     ₺{Number(currentCustomer.total_balance).toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
                   </div>
@@ -139,11 +143,32 @@ export default function PaymentModal({ isOpen, onClose, selectedCustomer = null 
                     type="button" 
                     onClick={handleSetFullAmount} 
                     className="btn btn-secondary btn-sm"
+                    style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                   >
-                    <Check size={14} color="var(--emerald-text)" />
-                    Tamamını Kapat
+                    <Check size={14} /> Tüm Kayıtlı Borcu Gir
                   </button>
                 )}
+              </div>
+            )}
+
+            {/* Fiyatlandırılmamış Ürün Uyarısı */}
+            {hasPendingItems && (
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'flex-start', 
+                gap: '0.6rem', 
+                background: 'rgba(245, 158, 11, 0.12)', 
+                padding: '0.75rem 1rem', 
+                borderRadius: 'var(--radius-md)', 
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                marginBottom: '1.25rem',
+                color: '#fbbf24',
+                fontSize: '0.85rem'
+              }}>
+                <AlertTriangle size={18} style={{ shrink: 0, marginTop: '2px' }} />
+                <div>
+                  <strong>⏳ Dikkat:</strong> Bu müşterinin henüz fiyatı belirlenmemiş (sonradan fiyatlanacak) veresiye kalemleri mevcuttur. Müşteri ekstrisinden güncel fiyatları girip borca yansıtabilirsiniz.
+                </div>
               </div>
             )}
 

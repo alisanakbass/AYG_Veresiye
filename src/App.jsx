@@ -9,11 +9,76 @@ import CustomerFormPage from './components/CustomerFormPage';
 import CustomerDetailPage from './components/CustomerDetailPage';
 import NotepadPage from './components/NotepadPage';
 
+import { getCustomers } from './services/storage';
+
 const THEME_KEY = 'ayg_veresiye_theme_v1';
 
+const parseHash = () => {
+  const hash = window.location.hash.replace(/^#/, '');
+  if (!hash) return { tab: 'home', customerId: null };
+
+  const [tabPart, queryPart] = hash.split('?');
+  const params = new URLSearchParams(queryPart || '');
+  return {
+    tab: tabPart || 'home',
+    customerId: params.get('id')
+  };
+};
+
+const buildHash = (tab, customerId = null) => {
+  if (tab === 'customer-detail' && customerId) {
+    return `#customer-detail?id=${customerId}`;
+  }
+  return `#${tab}`;
+};
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTabState] = useState('home');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [notification, setNotification] = useState(null);
+
+  const setActiveTab = (tab, customer = null) => {
+    const cust = customer || selectedCustomer;
+    setActiveTabState(tab);
+    if (customer) {
+      setSelectedCustomer(customer);
+    }
+    const newHash = buildHash(tab, cust?.id);
+    if (window.location.hash !== newHash) {
+      window.history.pushState({ tab, customerId: cust?.id }, '', newHash);
+    }
+  };
+
+  useEffect(() => {
+    const syncFromHash = () => {
+      const { tab, customerId } = parseHash();
+      setActiveTabState(tab);
+      if (customerId) {
+        const found = getCustomers().find(c => c.id === customerId);
+        if (found) setSelectedCustomer(found);
+      }
+    };
+
+    syncFromHash();
+
+    const onPopState = () => {
+      syncFromHash();
+    };
+
+    window.addEventListener('popstate', onPopState);
+    window.addEventListener('hashchange', onPopState);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      window.removeEventListener('hashchange', onPopState);
+    };
+  }, []);
+
+  const showNotification = (message, type = 'success') => {
+    setNotification({ message, type });
+    setTimeout(() => {
+      setNotification(null);
+    }, 4500);
+  };
 
   // Tema Yönetimi
   const [theme, setTheme] = useState(() => {
@@ -31,18 +96,19 @@ export default function App() {
 
   // Navigasyon Yönlendirme Fonksiyonları
   const handleOpenCustomerDetail = (customer) => {
+    if (!customer) return;
     setSelectedCustomer(customer);
-    setActiveTab('customer-detail');
+    setActiveTab('customer-detail', customer);
   };
 
   const handleOpenNewTransaction = (customer = null) => {
-    setSelectedCustomer(customer);
-    setActiveTab('add-transaction');
+    if (customer) setSelectedCustomer(customer);
+    setActiveTab('add-transaction', customer);
   };
 
   const handleOpenNewPayment = (customer = null) => {
-    setSelectedCustomer(customer);
-    setActiveTab('add-payment');
+    if (customer) setSelectedCustomer(customer);
+    setActiveTab('add-payment', customer);
   };
 
   const handleOpenNewCustomer = () => {
@@ -55,12 +121,41 @@ export default function App() {
 
   const handleCustomerCreated = (newCustomer) => {
     setSelectedCustomer(newCustomer);
-    setActiveTab('add-transaction');
+    setActiveTab('add-transaction', newCustomer);
+    showNotification(`✅ "${newCustomer.first_name} ${newCustomer.last_name}" müşterisi başarıyla kaydedildi! Veresiye ekleme ekranındasınız.`);
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', position: 'relative' }}>
       
+      {/* Toast Bildirimi */}
+      {notification && (
+        <div style={{
+          position: 'fixed',
+          top: '1.25rem',
+          right: '1.25rem',
+          zIndex: 9999,
+          background: notification.type === 'success' ? '#10b981' : '#f59e0b',
+          color: '#ffffff',
+          padding: '0.9rem 1.4rem',
+          borderRadius: 'var(--radius-md)',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.3)',
+          fontWeight: '700',
+          fontSize: '0.9375rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.65rem'
+        }}>
+          <span>{notification.message}</span>
+          <button 
+            onClick={() => setNotification(null)} 
+            style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '1.2rem', marginLeft: '0.5rem', opacity: 0.8 }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Header & Navbar */}
       <Navbar 
         activeTab={activeTab}
@@ -94,6 +189,7 @@ export default function App() {
             onOpenNewTransaction={handleOpenNewTransaction}
             onOpenNewPayment={handleOpenNewPayment}
             onOpenNewCustomer={handleOpenNewCustomer}
+            showNotification={showNotification}
           />
         )}
 
@@ -102,6 +198,7 @@ export default function App() {
             selectedCustomer={selectedCustomer}
             onNavigateHome={() => setActiveTab('home')}
             onNavigateCustomers={() => setActiveTab('customers')}
+            showNotification={showNotification}
           />
         )}
 
@@ -109,6 +206,7 @@ export default function App() {
           <PaymentPage 
             selectedCustomer={selectedCustomer}
             onNavigateHome={() => setActiveTab('home')}
+            showNotification={showNotification}
           />
         )}
 
@@ -117,6 +215,7 @@ export default function App() {
             onNavigateHome={() => setActiveTab('home')}
             onNavigateCustomers={() => setActiveTab('customers')}
             onCustomerCreated={handleCustomerCreated}
+            showNotification={showNotification}
           />
         )}
 
@@ -127,12 +226,14 @@ export default function App() {
             onNavigateCustomers={() => setActiveTab('customers')}
             onOpenNewTransaction={handleOpenNewTransaction}
             onOpenNewPayment={handleOpenNewPayment}
+            showNotification={showNotification}
           />
         )}
 
         {activeTab === 'notepad' && (
           <NotepadPage 
             onNavigateHome={() => setActiveTab('home')}
+            showNotification={showNotification}
           />
         )}
       </main>

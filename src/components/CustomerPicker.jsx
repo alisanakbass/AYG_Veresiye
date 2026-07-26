@@ -21,12 +21,11 @@ export default function CustomerPicker({ customers = [], selectedCustomerId = ''
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Seçili müşteri değiştiğinde arama kutusunun yazısını güncelle
   useEffect(() => {
     if (selectedCustomer && !isOpen) {
       setSearchTerm(`${selectedCustomer.first_name} ${selectedCustomer.last_name}`);
     }
-  }, [selectedCustomerId, isOpen]);
+  }, [selectedCustomerId, selectedCustomer, isOpen]);
 
   // Arama filtreleme mantığı (İsim, Soyisim veya Telefon)
   const filteredCustomers = customers.filter(c => {

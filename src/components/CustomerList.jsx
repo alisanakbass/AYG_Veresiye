@@ -18,38 +18,49 @@ import { getCustomers, deleteCustomer } from '../services/storage';
 import { buildReminderMessage, createWhatsappLink } from '../services/whatsapp';
 import { exportCustomersToExcel } from '../services/excelExport';
 
-export default function CustomerList({ onSelectCustomer, onOpenNewTransaction, onOpenNewPayment, onOpenNewCustomer }) {
+export default function CustomerList({ onSelectCustomer, onOpenNewTransaction, onOpenNewPayment, onOpenNewCustomer, showNotification }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMode, setFilterMode] = useState('all');
   const [sortBy, setSortBy] = useState('highest_debt');
   const [viewMode, setViewMode] = useState('table');
+  const [customers, setCustomers] = useState(() => getCustomers());
 
-  const allCustomers = getCustomers();
+  React.useEffect(() => {
+    setCustomers(getCustomers());
+  }, []);
 
-  let filtered = allCustomers.filter(customer => {
-    const fullName = `${customer.first_name} ${customer.last_name}`.toLowerCase();
-    const phone = customer.phone ? customer.phone.toLowerCase() : '';
-    const query = searchTerm.toLowerCase().trim();
+  let filtered = (customers || []).filter(customer => {
+    if (!customer) return false;
+    const firstName = customer.first_name || '';
+    const lastName = customer.last_name || '';
+    const fullName = `${firstName} ${lastName}`.toLowerCase();
+    const phone = customer.phone ? String(customer.phone).toLowerCase() : '';
+    const query = (searchTerm || '').toLowerCase().trim();
 
     const matchesSearch = fullName.includes(query) || phone.includes(query);
 
     if (!matchesSearch) return false;
 
-    if (filterMode === 'debtors') return Number(customer.total_balance) > 0;
-    if (filterMode === 'settled') return Number(customer.total_balance) === 0;
+    if (filterMode === 'debtors') return Number(customer.total_balance || 0) > 0;
+    if (filterMode === 'settled') return Number(customer.total_balance || 0) === 0;
 
     return true;
   });
 
   filtered.sort((a, b) => {
+    if (!a || !b) return 0;
     if (sortBy === 'highest_debt') {
-      return Number(b.total_balance) - Number(a.total_balance);
+      return Number(b.total_balance || 0) - Number(a.total_balance || 0);
     }
     if (sortBy === 'name') {
-      return a.first_name.localeCompare(b.first_name, 'tr');
+      const aName = (a.first_name || '').trim();
+      const bName = (b.first_name || '').trim();
+      return aName.localeCompare(bName, 'tr');
     }
     if (sortBy === 'recent') {
-      return new Date(b.created_at) - new Date(a.created_at);
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return dateB - dateA;
     }
     return 0;
   });
@@ -57,7 +68,10 @@ export default function CustomerList({ onSelectCustomer, onOpenNewTransaction, o
   const handleDelete = (id, name) => {
     if (window.confirm(`${name} isimli müşteriyi silmek istediğinizden emin misiniz?`)) {
       deleteCustomer(id);
-      window.location.reload();
+      setCustomers(getCustomers());
+      if (showNotification) {
+        showNotification(`🗑️ ${name} isimli müşteri silindi.`, 'warning');
+      }
     }
   };
 
@@ -113,13 +127,13 @@ export default function CustomerList({ onSelectCustomer, onOpenNewTransaction, o
               onClick={() => setFilterMode('all')}
               className={`btn btn-sm ${filterMode === 'all' ? 'btn-primary' : 'btn-secondary'}`}
             >
-              Tüm Müşteriler ({allCustomers.length})
+              Tüm Müşteriler ({(customers || []).length})
             </button>
             <button
               onClick={() => setFilterMode('debtors')}
               className={`btn btn-sm ${filterMode === 'debtors' ? 'btn-danger' : 'btn-secondary'}`}
             >
-              Borçlu Olanlar ({allCustomers.filter(c => Number(c.total_balance) > 0).length})
+              Borçlu Olanlar ({(customers || []).filter(c => Number(c?.total_balance || 0) > 0).length})
             </button>
             <button
               onClick={() => setFilterMode('settled')}

@@ -10,7 +10,7 @@ export default function PaymentPage({ selectedCustomer = null, onNavigateHome })
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [notes, setNotes] = useState('');
-  const [sendWhatsapp, setSendWhatsapp] = useState(true);
+  const [sendWhatsapp, setSendWhatsapp] = useState(false);
 
   useEffect(() => {
     const allCustomers = getCustomers();
@@ -86,7 +86,9 @@ export default function PaymentPage({ selectedCustomer = null, onNavigateHome })
     if (sendWhatsapp && currentCustomer) {
       const msg = buildPaymentMessage(currentCustomer, payAmount, newTotalBalance);
       const url = createWhatsappLink(currentCustomer.phone, msg);
-      window.open(url, '_blank');
+      if (window.confirm('💬 Müşteriye WhatsApp ödeme makbuzu mesajı gönderilsin mi?')) {
+        window.open(url, '_blank');
+      }
     }
 
     onNavigateHome();
