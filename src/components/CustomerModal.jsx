@@ -18,16 +18,20 @@ export default function CustomerModal({ isOpen, onClose, onCreated }) {
       return;
     }
 
-    const newCustomer = addCustomer({
-      first_name: firstName,
-      last_name: lastName,
-      phone: phone,
-      address: address,
-      notes: notes
-    });
+    try {
+      const newCustomer = addCustomer({
+        first_name: firstName,
+        last_name: lastName,
+        phone: phone,
+        address: address,
+        notes: notes
+      });
 
-    if (onCreated) onCreated(newCustomer);
-    onClose();
+      if (onCreated) onCreated(newCustomer);
+      onClose();
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   return (

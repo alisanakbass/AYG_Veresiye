@@ -8,8 +8,9 @@ import PaymentPage from './components/PaymentPage';
 import CustomerFormPage from './components/CustomerFormPage';
 import CustomerDetailPage from './components/CustomerDetailPage';
 import NotepadPage from './components/NotepadPage';
+import PinLoginModal from './components/PinLoginModal';
 
-import { getCustomers } from './services/storage';
+import { getCustomers, getActiveUser } from './services/storage';
 
 const THEME_KEY = 'ayg_veresiye_theme_v1';
 
@@ -36,6 +37,18 @@ export default function App() {
   const [activeTab, setActiveTabState] = useState('home');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [notification, setNotification] = useState(null);
+
+  const [currentUser, setCurrentUser] = useState(() => getActiveUser());
+  const [isPinModalOpen, setIsPinModalOpen] = useState(() => !getActiveUser());
+
+  useEffect(() => {
+    const user = getActiveUser();
+    if (!user) {
+      setIsPinModalOpen(true);
+    } else {
+      setCurrentUser(user);
+    }
+  }, []);
 
   const setActiveTab = (tab, customer = null) => {
     const cust = customer || selectedCustomer;
@@ -162,6 +175,12 @@ export default function App() {
         setActiveTab={setActiveTab}
         theme={theme}
         onToggleTheme={toggleTheme}
+        currentUser={currentUser}
+        showNotification={showNotification}
+        onLock={() => {
+          setCurrentUser(null);
+          setIsPinModalOpen(true);
+        }}
       />
 
       {/* Main Content Area */}
@@ -190,6 +209,7 @@ export default function App() {
             onOpenNewPayment={handleOpenNewPayment}
             onOpenNewCustomer={handleOpenNewCustomer}
             showNotification={showNotification}
+            currentUser={currentUser}
           />
         )}
 
@@ -227,6 +247,7 @@ export default function App() {
             onOpenNewTransaction={handleOpenNewTransaction}
             onOpenNewPayment={handleOpenNewPayment}
             showNotification={showNotification}
+            currentUser={currentUser}
           />
         )}
 
@@ -234,9 +255,20 @@ export default function App() {
           <NotepadPage 
             onNavigateHome={() => setActiveTab('home')}
             showNotification={showNotification}
+            currentUser={currentUser}
           />
         )}
       </main>
+
+      {/* Pin Giriş Modalı */}
+      <PinLoginModal
+        isOpen={isPinModalOpen}
+        onSuccess={(user) => {
+          setCurrentUser(user);
+          setIsPinModalOpen(false);
+          showNotification(`🔑 Hoş geldiniz, ${user.name}!`);
+        }}
+      />
 
       {/* Footer */}
       <footer style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-dim)', fontSize: '0.8125rem', borderTop: '1px solid var(--border-color)' }}>

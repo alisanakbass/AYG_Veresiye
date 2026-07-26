@@ -121,8 +121,7 @@ export default function TransactionPage({ selectedCustomer = null, onNavigateHom
 
     if (e.target.id === 'notes-input') {
       e.preventDefault();
-      const submitBtn = document.getElementById('tx-submit-btn');
-      if (submitBtn) submitBtn.focus();
+      handleSubmit(e);
       return;
     }
   };

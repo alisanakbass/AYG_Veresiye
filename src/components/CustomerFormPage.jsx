@@ -31,17 +31,21 @@ export default function CustomerFormPage({ onNavigateHome, onCustomerCreated }) 
       return;
     }
 
-    const newCustomer = addCustomer({
-      first_name: firstName,
-      last_name: lastName,
-      phone: phone,
-      address: address,
-      notes: notes
-    });
+    try {
+      const newCustomer = addCustomer({
+        first_name: firstName,
+        last_name: lastName,
+        phone: phone,
+        address: address,
+        notes: notes
+      });
 
-    // Yeni müşteri kaydedildikten sonra otomatik olarak Veresiye Ekle sayfasına yönlendir
-    if (onCustomerCreated) {
-      onCustomerCreated(newCustomer);
+      // Yeni müşteri kaydedildikten sonra otomatik olarak Veresiye Ekle sayfasına yönlendir
+      if (onCustomerCreated) {
+        onCustomerCreated(newCustomer);
+      }
+    } catch (err) {
+      alert(err.message);
     }
   };
 

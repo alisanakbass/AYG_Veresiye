@@ -18,7 +18,7 @@ import { getCustomers, deleteCustomer } from '../services/storage';
 import { buildReminderMessage, createWhatsappLink } from '../services/whatsapp';
 import { exportCustomersToExcel } from '../services/excelExport';
 
-export default function CustomerList({ onSelectCustomer, onOpenNewTransaction, onOpenNewPayment, onOpenNewCustomer, showNotification }) {
+export default function CustomerList({ onSelectCustomer, onOpenNewTransaction, onOpenNewPayment, onOpenNewCustomer, showNotification, currentUser }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMode, setFilterMode] = useState('all');
   const [sortBy, setSortBy] = useState('highest_debt');
@@ -66,6 +66,10 @@ export default function CustomerList({ onSelectCustomer, onOpenNewTransaction, o
   });
 
   const handleDelete = (id, name) => {
+    if (currentUser && currentUser.role !== 'owner') {
+      alert('⚠️ Müşteri silme yetkisi sadece Dükkan Sahibi (Admin) hesabında mevcuttur.');
+      return;
+    }
     if (window.confirm(`${name} isimli müşteriyi silmek istediğinizden emin misiniz?`)) {
       deleteCustomer(id);
       setCustomers(getCustomers());

@@ -7,169 +7,133 @@ const PAYMENTS_KEY = 'ayg_veresiye_payments_v1';
 const ACTIVE_USER_KEY = 'ayg_veresiye_active_user_v1';
 const NOTES_KEY = 'ayg_veresiye_notes_v1';
 
-// Personel / Kullanıcı Listesi (Max 3 Personel)
+// Personel / Kullanıcı Listesi (PIN'li ve Rol Tanımlı)
 export const USERS = [
-  { id: 'u1', name: 'Ahmet (Dükkan Sahibi)', role: 'owner' },
-  { id: 'u2', name: 'Mehmet (Kasiyer)', role: 'staff' },
-  { id: 'u3', name: 'Ali (Tezgahtar)', role: 'staff' }
+  { id: 'u1', name: 'Ahmet (Dükkan Sahibi)', role: 'owner', pin: '1234', title: '👑 Dükkan Sahibi' },
+  { id: 'u2', name: 'Mehmet (Kasiyer)', role: 'staff', pin: '0000', title: '👤 Kasiyer' },
+  { id: 'u3', name: 'Ali (Tezgahtar)', role: 'staff', pin: '0000', title: '👤 Tezgahtar' }
 ];
 
-// Varsayılan Demo Müşteriler
-const INITIAL_CUSTOMERS = [
-  {
-    id: 'c1',
-    first_name: 'Hasan',
-    last_name: 'Kaya',
-    phone: '05321112233',
-    address: 'Atatürk Cad. No:14/A',
-    notes: 'Mahalle fırıncısı, haftalık öder',
-    total_balance: 1450,
-    created_at: new Date('2026-06-01').toISOString()
-  },
-  {
-    id: 'c2',
-    first_name: 'Ayşe',
-    last_name: 'Demir',
-    phone: '05432223344',
-    address: 'Gül Sok. Orkide Apt. D:3',
-    notes: 'Maaş günü ödeme yapıyor (Her ayın 15\'i)',
-    total_balance: 620,
-    created_at: new Date('2026-06-05').toISOString()
-  },
-  {
-    id: 'c3',
-    first_name: 'Mustafa',
-    last_name: 'Yılmaz',
-    phone: '05553334455',
-    address: 'Sanayi Sit. 4. Blok No:8',
-    notes: 'Oto tamircisi Mustafa usta',
-    total_balance: 2800,
-    created_at: new Date('2026-06-10').toISOString()
-  },
-  {
-    id: 'c4',
-    first_name: 'Fatma',
-    last_name: 'Şahin',
-    phone: '05054445566',
-    address: 'Çınar Mah. 12. Sok No:5',
-    notes: 'Borcu yok, temiz çalışır',
-    total_balance: 0,
-    created_at: new Date('2026-06-15').toISOString()
+const CUSTOM_USERS_KEY = 'ayg_veresiye_custom_users_v2';
+
+export function getUsers() {
+  try {
+    const saved = localStorage.getItem(CUSTOM_USERS_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return USERS;
+}
+
+export function updateUserProfile(userId, { name, pin }) {
+  const currentUsers = getUsers();
+  const index = currentUsers.findIndex(u => u.id === userId);
+  if (index !== -1) {
+    if (name && name.trim()) {
+      const trimmedName = name.trim();
+      currentUsers[index].name = trimmedName;
+      currentUsers[index].title = (currentUsers[index].role === 'owner' ? '👑 ' : '👤 ') + trimmedName;
+    }
+    if (pin && pin.trim()) {
+      currentUsers[index].pin = String(pin).trim();
+    }
+    localStorage.setItem(CUSTOM_USERS_KEY, JSON.stringify(currentUsers));
+
+    // Aktif kullanıcı ise aktif oturumu da güncelle
+    const active = getActiveUser();
+    if (active && active.id === userId) {
+      setActiveUser(currentUsers[index]);
+    }
   }
-];
+  return currentUsers;
+}
+
+export function verifyUserPin(userId, inputPin) {
+  const users = getUsers();
+  const found = users.find(u => u.id === userId);
+  const expectedPin = found ? found.pin : '0000';
+  return expectedPin === String(inputPin).trim();
+}
+
+export function getActiveUser() {
+  try {
+    const localUser = localStorage.getItem(ACTIVE_USER_KEY);
+    if (localUser) return JSON.parse(localUser);
+
+    const sessionUser = sessionStorage.getItem(ACTIVE_USER_KEY);
+    if (sessionUser) return JSON.parse(sessionUser);
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function setActiveUser(user, remember = true) {
+  if (!user) return;
+  const data = JSON.stringify(user);
+  if (remember) {
+    localStorage.setItem(ACTIVE_USER_KEY, data);
+    sessionStorage.removeItem(ACTIVE_USER_KEY);
+  } else {
+    sessionStorage.setItem(ACTIVE_USER_KEY, data);
+    localStorage.removeItem(ACTIVE_USER_KEY);
+  }
+}
+
+export function logoutUser() {
+  localStorage.removeItem(ACTIVE_USER_KEY);
+  sessionStorage.removeItem(ACTIVE_USER_KEY);
+}
+
+// Varsayılan Demo Müşteriler (Üretim ortamında temiz sıfır başlangıç)
+const INITIAL_CUSTOMERS = [];
 
 // Varsayılan Demo Veresiye Kayıtları
-const INITIAL_TRANSACTIONS = [
-  {
-    id: 't1',
-    customer_id: 'c1',
-    items: [
-      { product_name: 'Çaykur Rize Çay 1 kg', quantity: 2, unit_price: 180, total_price: 360 },
-      { product_name: 'Zeytin 1 kg', quantity: 1, unit_price: 240, total_price: 240 }
-    ],
-    total_amount: 600,
-    notes: 'Sabah teslim edildi',
-    created_by: 'Ahmet (Dükkan Sahibi)',
-    transaction_date: new Date('2026-07-20T09:30:00').toISOString()
-  },
-  {
-    id: 't2',
-    customer_id: 'c1',
-    items: [
-      { product_name: 'Sütaş Peynir 1 kg', quantity: 2, unit_price: 225, total_price: 450 },
-      { product_name: 'Şeker 5 kg', quantity: 2, unit_price: 200, total_price: 400 }
-    ],
-    total_amount: 850,
-    notes: '',
-    created_by: 'Mehmet (Kasiyer)',
-    transaction_date: new Date('2026-07-22T14:15:00').toISOString()
-  },
-  {
-    id: 't3',
-    customer_id: 'c2',
-    items: [
-      { product_name: 'Ayçiçek Yağı 5L', quantity: 1, unit_price: 320, total_price: 320 },
-      { product_name: 'Baldo Pirinç 2 kg', quantity: 2, unit_price: 150, total_price: 300 }
-    ],
-    total_amount: 620,
-    notes: 'Çırak götürdü',
-    created_by: 'Ali (Tezgahtar)',
-    transaction_date: new Date('2026-07-23T11:00:00').toISOString()
-  },
-  {
-    id: 't4',
-    customer_id: 'c3',
-    items: [
-      { product_name: 'Kuru Fasulye 2 kg', quantity: 4, unit_price: 120, total_price: 480 },
-      { product_name: 'Dana Kıymalık Meat 2 kg', quantity: 4, unit_price: 580, total_price: 2320 }
-    ],
-    total_amount: 2800,
-    notes: 'Dükkana sipariş verildi',
-    created_by: 'Ahmet (Dükkan Sahibi)',
-    transaction_date: new Date('2026-07-24T16:45:00').toISOString()
-  }
-];
+const INITIAL_TRANSACTIONS = [];
 
 // Varsayılan Demo Ödeme Kayıtları
-const INITIAL_PAYMENTS = [
-  {
-    id: 'p1',
-    customer_id: 'c4',
-    amount: 500,
-    payment_method: 'cash',
-    notes: 'Elden teslim edildi, borcu kapandı',
-    received_by: 'Ahmet (Dükkan Sahibi)',
-    payment_date: new Date('2026-07-21T10:00:00').toISOString()
-  }
-];
+const INITIAL_PAYMENTS = [];
 
 // Varsayılan Demo Notlar
-const INITIAL_NOTES = [
-  {
-    id: 'n1',
-    title: 'Çaykur Toptancı Siparişi',
-    content: 'Perşembe günü 10 koli Rize Çay ve 5 koli Filiz Çay siparişi verilecek.',
-    category: 'supplier',
-    is_pinned: true,
-    is_completed: false,
-    created_at: new Date('2026-07-24T08:00:00').toISOString()
-  },
-  {
-    id: 'n2',
-    title: 'Hasan Fırıncı Hatırlatması',
-    content: 'Cumartesi günü haftalık hesap kapatılacak, fişleri hazırla.',
-    category: 'reminder',
-    is_pinned: true,
-    is_completed: false,
-    created_at: new Date('2026-07-25T09:30:00').toISOString()
-  },
-  {
-    id: 'n3',
-    title: 'Elektrik Faturası Ödemesi',
-    content: 'Son ödeme tarihi 28 Temmuz olan dükkan faturası ödenecek.',
-    category: 'finance',
-    is_pinned: false,
-    is_completed: true,
-    created_at: new Date('2026-07-20T11:00:00').toISOString()
-  }
-];
+const INITIAL_NOTES = [];
+
+// Veritabanı Sıfırlama (Tüm yerel ve Supabase verilerini temizleme)
+export function clearAllData() {
+  localStorage.setItem(CUSTOMERS_KEY, JSON.stringify([]));
+  localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify([]));
+  localStorage.setItem(PAYMENTS_KEY, JSON.stringify([]));
+  localStorage.setItem(NOTES_KEY, JSON.stringify([]));
+
+  safeSupabaseCall(supabase.from('transactions').delete().neq('id', '0'));
+  safeSupabaseCall(supabase.from('payments').delete().neq('id', '0'));
+  safeSupabaseCall(supabase.from('notes').delete().neq('id', '0'));
+  safeSupabaseCall(supabase.from('customers').delete().neq('id', '0'));
+}
+
+const HAS_CLEARED_DEMO_KEY = 'ayg_veresiye_cleared_demo_v2';
 
 // Depo Başlatıcı ve Supabase Senkronizasyonu
 export function initStorage() {
+  // İlk çalıştırmada eski tüm demo/test verilerini hem yerel depodan hem Supabase'den sıfırla
+  if (!localStorage.getItem(HAS_CLEARED_DEMO_KEY)) {
+    clearAllData();
+    localStorage.setItem(HAS_CLEARED_DEMO_KEY, 'true');
+  }
+
   if (!localStorage.getItem(CUSTOMERS_KEY)) {
-    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify(INITIAL_CUSTOMERS));
+    localStorage.setItem(CUSTOMERS_KEY, JSON.stringify([]));
   }
   if (!localStorage.getItem(TRANSACTIONS_KEY)) {
-    localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify(INITIAL_TRANSACTIONS));
+    localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify([]));
   }
   if (!localStorage.getItem(PAYMENTS_KEY)) {
-    localStorage.setItem(PAYMENTS_KEY, JSON.stringify(INITIAL_PAYMENTS));
+    localStorage.setItem(PAYMENTS_KEY, JSON.stringify([]));
   }
   if (!localStorage.getItem(ACTIVE_USER_KEY)) {
     localStorage.setItem(ACTIVE_USER_KEY, JSON.stringify(USERS[0]));
   }
   if (!localStorage.getItem(NOTES_KEY)) {
-    localStorage.setItem(NOTES_KEY, JSON.stringify(INITIAL_NOTES));
+    localStorage.setItem(NOTES_KEY, JSON.stringify([]));
   }
 
   // Arka planda Supabase senkronizasyonunu tetikle
@@ -203,19 +167,7 @@ export async function syncFromSupabase() {
   }
 }
 
-// Aktif Personel Yönetimi
-export function getActiveUser() {
-  initStorage();
-  try {
-    return JSON.parse(localStorage.getItem(ACTIVE_USER_KEY)) || USERS[0];
-  } catch {
-    return USERS[0];
-  }
-}
 
-export function setActiveUser(user) {
-  localStorage.setItem(ACTIVE_USER_KEY, JSON.stringify(user));
-}
 
 // Müşterileri Getir
 export function getCustomers() {
@@ -236,11 +188,25 @@ const safeSupabaseCall = (query) => {
 // Müşteri Ekle
 export function addCustomer(customerData) {
   const customers = getCustomers();
+
+  const firstNameTrimmed = customerData.first_name.trim();
+  const lastNameTrimmed = customerData.last_name.trim();
+
+  // Aynı Ad ve Soyada sahip müşteri kontrolü (küçük/büyük harf duyarsız)
+  const isDuplicate = customers.some(
+    c => c.first_name.toLowerCase().trim() === firstNameTrimmed.toLowerCase() &&
+         c.last_name.toLowerCase().trim() === lastNameTrimmed.toLowerCase()
+  );
+
+  if (isDuplicate) {
+    throw new Error(`"${firstNameTrimmed} ${lastNameTrimmed}" adında kayıtlı bir müşteri zaten var! Lütfen farklı bir isim giriniz veya ayırt edici bir unvan/lakap ekleyiniz.`);
+  }
+
   const newCustomer = {
     id: 'c_' + Date.now(),
-    first_name: customerData.first_name.trim(),
-    last_name: customerData.last_name.trim(),
-    phone: customerData.phone.trim(),
+    first_name: firstNameTrimmed,
+    last_name: lastNameTrimmed,
+    phone: customerData.phone ? customerData.phone.trim() : '',
     address: customerData.address ? customerData.address.trim() : '',
     notes: customerData.notes ? customerData.notes.trim() : '',
     total_balance: 0,

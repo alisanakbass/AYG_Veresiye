@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   FileText, 
   Plus, 
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { getNotes, addNote, toggleNotePin, toggleNoteComplete, deleteNote } from '../services/storage';
 
-export default function NotepadPage({ onNavigateHome }) {
+export default function NotepadPage({ onNavigateHome, currentUser }) {
   const [notes, setNotes] = useState([]);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -21,14 +21,23 @@ export default function NotepadPage({ onNavigateHome }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
 
+  const titleInputRef = useRef(null);
+  const categorySelectRef = useRef(null);
+  const contentTextareaRef = useRef(null);
+
   useEffect(() => {
     setNotes(getNotes());
+    // Sayfa/Sekme açıldığında imleci doğrudan Not Başlığı alanına odakla
+    if (titleInputRef.current) {
+      titleInputRef.current.focus();
+    }
   }, []);
 
   const handleAddNote = (e) => {
-    e.preventDefault();
+    if (e) e.preventDefault();
     if (!title.trim()) {
       alert('Lütfen bir not başlığı giriniz.');
+      if (titleInputRef.current) titleInputRef.current.focus();
       return;
     }
 
@@ -37,6 +46,47 @@ export default function NotepadPage({ onNavigateHome }) {
     setContent('');
     setCategory('general');
     setNotes(getNotes());
+
+    // Kaydettikten sonra imleci tekrar Not Başlığı kutusuna döndür (seri kayıt için)
+    setTimeout(() => {
+      if (titleInputRef.current) {
+        titleInputRef.current.focus();
+      }
+    }, 50);
+  };
+
+  const handleKeyDown = (e) => {
+    // 1. Herhangi bir yerde Ctrl + Enter / Cmd + Enter basılırsa direkt kaydet
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      handleAddNote(e);
+      return;
+    }
+
+    // 2. Not Başlığında Enter -> Kategori Seçeneğine Odaklan
+    if (e.key === 'Enter' && e.target === titleInputRef.current) {
+      e.preventDefault();
+      if (categorySelectRef.current) {
+        categorySelectRef.current.focus();
+      }
+      return;
+    }
+
+    // 3. Kategori Seçiminde Enter -> Detaylı Açıklamaya Odaklan
+    if (e.key === 'Enter' && e.target === categorySelectRef.current) {
+      e.preventDefault();
+      if (contentTextareaRef.current) {
+        contentTextareaRef.current.focus();
+      }
+      return;
+    }
+
+    // 4. Detaylı Açıklamada Enter (Shift basılı değilse) -> Notu Kaydet
+    if (e.key === 'Enter' && e.target === contentTextareaRef.current && !e.shiftKey) {
+      e.preventDefault();
+      handleAddNote(e);
+      return;
+    }
   };
 
   const handleTogglePin = (id) => {
@@ -50,6 +100,10 @@ export default function NotepadPage({ onNavigateHome }) {
   };
 
   const handleDelete = (id) => {
+    if (currentUser && currentUser.role !== 'owner') {
+      alert('⚠️ Not silme yetkisi sadece Dükkan Sahibi (Admin) hesabında mevcuttur.');
+      return;
+    }
     if (window.confirm('Bu notu silmek istediğinizden emin misiniz?')) {
       const updated = deleteNote(id);
       setNotes(updated);
@@ -101,7 +155,7 @@ export default function NotepadPage({ onNavigateHome }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1.5rem', alignItems: 'start' }}>
         
         {/* Left Column: Form to Add New Note */}
-        <form onSubmit={handleAddNote} className="glass-card" style={{ padding: '1.75rem' }}>
+        <form onSubmit={handleAddNote} onKeyDown={handleKeyDown} className="glass-card" style={{ padding: '1.75rem' }}>
           <h3 style={{ fontSize: '1.125rem', fontWeight: '800', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Plus size={18} color="var(--primary)" /> Yeni Not Ekle
           </h3>
@@ -109,8 +163,10 @@ export default function NotepadPage({ onNavigateHome }) {
           <div className="form-group" style={{ marginBottom: '1rem' }}>
             <label className="form-label">Not Başlığı *</label>
             <input
+              ref={titleInputRef}
               type="text"
               required
+              autoFocus
               placeholder="Örn: Çaykur toptancısına uğra"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -121,6 +177,7 @@ export default function NotepadPage({ onNavigateHome }) {
           <div className="form-group" style={{ marginBottom: '1rem' }}>
             <label className="form-label">Kategori</label>
             <select
+              ref={categorySelectRef}
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="form-select"
@@ -135,12 +192,16 @@ export default function NotepadPage({ onNavigateHome }) {
           <div className="form-group" style={{ marginBottom: '1.5rem' }}>
             <label className="form-label">Detaylı Açıklama (İsteğe Bağlı)</label>
             <textarea
+              ref={contentTextareaRef}
               rows={4}
               placeholder="Örn: 10 koli çay ve 5 koli şeker söylenecek..."
               value={content}
               onChange={(e) => setContent(e.target.value)}
               className="form-textarea"
             />
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem', display: 'block' }}>
+              💡 <b>Sıralı Klavye Kullanımı:</b> Başlık → <b>Enter</b> → Kategori (Ok Yönleri) → <b>Enter</b> → Detay Açıklama → <b>Enter</b> (Kaydet)
+            </span>
           </div>
 
           <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.85rem', fontWeight: '800', fontSize: '1rem' }}>
