@@ -114,11 +114,6 @@ const HAS_CLEARED_DEMO_KEY = 'ayg_veresiye_cleared_demo_v2';
 
 // Depo Başlatıcı ve Supabase Senkronizasyonu
 export function initStorage() {
-  // İlk çalıştırmada eski tüm demo/test verilerini hem yerel depodan hem Supabase'den sıfırla
-  if (!localStorage.getItem(HAS_CLEARED_DEMO_KEY)) {
-    clearAllData();
-    localStorage.setItem(HAS_CLEARED_DEMO_KEY, 'true');
-  }
 
   if (!localStorage.getItem(CUSTOMERS_KEY)) {
     localStorage.setItem(CUSTOMERS_KEY, JSON.stringify([]));

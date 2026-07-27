@@ -149,16 +149,19 @@ export default function NotepadPage({ onNavigateHome, currentUser }) {
   };
 
   // Filtreleme ve Sıralama (Sabitlenmişler en üstte)
-  const filteredNotes = notes.filter(n => {
+  const filteredNotes = (notes || []).filter(n => {
+    if (!n) return false;
     const query = searchTerm.toLowerCase().trim();
-    const matchesSearch = n.title.toLowerCase().includes(query) || (n.content && n.content.toLowerCase().includes(query));
+    const noteTitle = (n.title || '').toLowerCase();
+    const noteContent = (n.content || '').toLowerCase();
+    const matchesSearch = noteTitle.includes(query) || noteContent.includes(query);
     
     if (!matchesSearch) return false;
     if (categoryFilter !== 'all' && n.category !== categoryFilter) return false;
     return true;
   }).sort((a, b) => {
     if (a.is_pinned !== b.is_pinned) return b.is_pinned ? 1 : -1;
-    return new Date(b.created_at) - new Date(a.created_at);
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
   });
 
   // Sayfalama Hesaplamaları
