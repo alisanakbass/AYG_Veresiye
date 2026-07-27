@@ -470,6 +470,23 @@ export function toggleNotePin(noteId) {
   return notes;
 }
 
+export function updateNote(noteId, { title, content, category }) {
+  const notes = getNotes();
+  const idx = notes.findIndex(n => n.id === noteId);
+  if (idx > -1) {
+    notes[idx] = {
+      ...notes[idx],
+      title: title.trim(),
+      content: content ? content.trim() : '',
+      category: category || notes[idx].category,
+      updated_at: new Date().toISOString()
+    };
+    localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
+    safeSupabaseCall(supabase.from('notes').upsert([notes[idx]]));
+  }
+  return notes;
+}
+
 export function toggleNoteComplete(noteId) {
   const notes = getNotes();
   const idx = notes.findIndex(n => n.id === noteId);
