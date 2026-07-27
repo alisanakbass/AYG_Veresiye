@@ -97,17 +97,12 @@ const INITIAL_PAYMENTS = [];
 // Varsayılan Demo Notlar
 const INITIAL_NOTES = [];
 
-// Veritabanı Sıfırlama (Tüm yerel ve Supabase verilerini temizleme)
+// Veritabanı Sıfırlama (Tüm yerel verileri temizleme)
 export function clearAllData() {
   localStorage.setItem(CUSTOMERS_KEY, JSON.stringify([]));
   localStorage.setItem(TRANSACTIONS_KEY, JSON.stringify([]));
   localStorage.setItem(PAYMENTS_KEY, JSON.stringify([]));
   localStorage.setItem(NOTES_KEY, JSON.stringify([]));
-
-  safeSupabaseCall(supabase.from('transactions').delete().neq('id', '0'));
-  safeSupabaseCall(supabase.from('payments').delete().neq('id', '0'));
-  safeSupabaseCall(supabase.from('notes').delete().neq('id', '0'));
-  safeSupabaseCall(supabase.from('customers').delete().neq('id', '0'));
 }
 
 const HAS_CLEARED_DEMO_KEY = 'ayg_veresiye_cleared_demo_v2';
